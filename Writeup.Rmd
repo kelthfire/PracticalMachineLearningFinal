@@ -1,0 +1,302 @@
+Analysis of Weight Lifting Exercise Dataset
+========================================================
+
+## Importing the data
+
+```{r cache=TRUE}
+
+# Load in the data with headers
+rawTraining <- read.csv("pml-training.csv",header=T)
+rawTesting <- read.csv("pml-testing.csv",header=T)
+
+```
+
+## Exploring the Data
+
+I began with a quick look through the column information.  
+
+### User Name
+A quick glance through the user_name column reveals that the test was taken from 6 subjects:
+```{r}
+
+users <- levels(rawTraining$user_name)
+
+print(users)
+
+```
+
+### Sensor Array Locations
+
+Looking through the column data, we find that each user had 4 sensors attached to them as they lifted weights.  These sensors were located at the:
+* belt
+* arm
+* dumbbell
+* forearm
+
+### Sensors
+
+At each sensor location, there is a Gyroscope, an Accelerometer, and a Magnetometer.  Each one of these sensors has information on the x, y and z direction.  That that means that all three of these are readings in the carteasian coordinate system. These columns are labeled:
+* gyros_(loc)_(dir)
+* accel_(loc)_(dir)
+* magnet_(loc)_(dir)
+
+### Angles
+
+Additionally, the columns also include roll, pitch, and yaw information.  That means that all three of these are in the polar coordinate system.  It is more than likely that these columns were in fact derived from the gyro/accel/magnet information.  However, it is not immediately clear what the methodology was for conversion (e.g. it could have been a mix of multiple sensors or only one).  Ether way, I will assume the data to be already processed in some way:
+* roll_(loc)
+* pitch_(loc)
+* yaw_(loc)
+
+### Classe
+
+The column we are ultimately trying to predict is the classe column.  Based on what we know of the problem, this corresponds to the manner in which the users are lifting weights.  We can see that there are five different ways that the users were asked to lift the weights:
+```{r}
+
+levels(rawTraining$classe)
+
+```
+
+### Other Columns
+
+There are several other columns present in the dataset, however, they are mostly NAs.  To keep things simple, I will focus on the ones we have here.
+
+
+### Collecting Columns
+
+Let's collect the variables we will use for prediction:
+
+```{r cache=TRUE}
+
+locations <- c("belt","arm","dumbbell","forearm")
+sensors <- c("gyros","accel","magnet")
+directions <- c("x","y","z")
+angles <- c("roll","pitch","yaw")
+
+
+# Every combination of locations, sensors, and directions
+xyzCols <- sort( apply( X = expand.grid(sensors,locations,directions) , MARGIN = 1, FUN = function(s) paste(s,collapse="_") ) )
+
+# Every combination of locations and angles
+rpyCols <- sort( apply( X = expand.grid(angles,locations) , MARGIN = 1, FUN = function(s) paste(s,collapse="_") ) ) 
+
+xCols <- c("user_name",xyzCols,rpyCols)
+
+print(xCols)
+
+```
+
+And the one column we will be predicting
+
+```{r}
+yCol <- "classe"
+```
+
+
+## Exploring the Data
+
+To get a feel for the data, lets plot the interaction of the belt x accelerometer and the user name.  To plot, I will be using ggplot2.
+
+```{r fig.width=16, fig.height=8, cache=TRUE}
+library(ggplot2)
+
+ggplot(rawTraining,aes(x=user_name,y=accel_belt_x,color=classe)) + geom_point(position=position_jitter(width=.5),alpha=.3)
+
+```
+The main thing to notice about this is that the data is centered around different points for different users.  After a quick check of the other columns, I found this to be true of them as well.  Each user may have had the sensor array positioned slightly differently on their bodies wich could have been the reason for the different centers. One idea I had was to manually center these predictors for each user separately as sort of a calibration of the sensors.  I will test this idea later.
+
+## Splitting the Data
+
+Now that we have an idea of where we are going, lets split our training data into two sets so we will have some way of judging the out of sample error.
+
+```{r cache=TRUE}
+library(caret)
+
+# Create a partition
+set.seed(12345)
+inTrain <- createDataPartition(y=rawTraining$classe,p=0.75,list=F)
+
+# Divide the data using the partition
+train <- rawTraining[inTrain,c(xCols,yCol)] # For training
+testOOSE <- rawTraining[-inTrain,c(xCols,yCol)] # For checking out of sample error
+testPROJ <- rawTesting[,xCols] # The project test set
+
+# Display the dimensions
+dim(train)
+dim(testOOSE)
+dim(testPROJ)
+
+```
+
+
+## Centering the data
+
+As was discussed earlier, we will want to center the data for each of the columns and people separately.  To do this I will take advantage of the plyr package (for ddply and join):
+
+```{r cache=TRUE}
+library(plyr)
+
+# The new column names
+meanNames <- paste("MEAN",xCols[-1],sep="_")
+adjNames <- paste("ADJ",xCols[-1],sep="_")
+
+# Calculate the column mean
+colMeans<-ddply(train[,xCols],.(user_name),numcolwise(mean))
+names(colMeans)<-c("user_name",meanNames)
+
+# Create a fubctuib to perform the centering
+centerFun <- function(df){
+  # Add the column means
+  trainADJ <- join(df,colMeans,"user_name","left","first")
+  
+  # Subtract out the means
+  trainADJ[,adjNames] <- trainADJ[,xCols[-1]] - trainADJ[,meanNames]
+
+  return(trainADJ)
+} 
+
+# Center the datasets
+trainADJ <- centerFun(train)
+testOOSEADJ <- centerFun(testOOSE)
+testPROJADJ <- centerFun(testPROJ)
+
+```
+
+To sanity check the code, I will redo the plot from earlier on the adjusted training dataset.  Note that a few of the data points will be missing when compared to the original plot because we partitioned the dataset
+
+```{r fig.width=16, fig.height=8, cache=TRUE}
+
+ggplot(trainADJ,aes(x=user_name,y=ADJ_accel_belt_x,color=classe)) + geom_point(position=position_jitter(width=.5),alpha=.3)
+
+```
+
+As you can see the data has been properly centered.  
+
+
+## Traing the Model 
+
+For my first attempt at prediction, I will fit a decision tree to the two datasets.
+
+```{r fitV1a,cache=TRUE}
+
+# Without centering
+set.seed(122333)
+system.time(fitA <- train(classe~.,data=train,method="rpart"))
+
+```
+
+```{r fitV2b,cache=TRUE}
+
+# With Centering
+set.seed(333221)
+system.time(fitB <- train(classe~.,data=trainADJ[,c("classe","user_name",adjNames)],method="rpart"))
+
+```
+
+Lets take a look at the in sample and out of sample errors for both of the predictions.
+
+```{r cache=TRUE}
+
+# Without Centering
+predictA <- predict(fitA,train)
+confusionMatrix(predictA,train[,"classe"])
+
+# With Centering
+predictB <- predict(fitB,trainADJ[,c("classe","user_name",adjNames)])
+confusionMatrix(predictB,trainADJ[,"classe"])
+
+```
+
+## Training Results Exploration
+
+As you can see, neither of these are particularly good.  Worse, my theory on centering the datasets actually made the prediction even worse!  For some reason, the centering of the data convince it to never guess B or D.  Lets explore the decision tree for A to see if there is any way we can improve this.
+
+
+```{r fig.width=16, fig.height=8, cache=TRUE}
+
+library(rattle)
+library(rpart.plot)
+
+fancyRpartPlot(fitA$finalModel)
+```
+
+Looking at the predictors we notice a few things.  First, we can see that it never once used the user name as a predictor.  We also see that it seemed to use the processed predictors (roll, pitch, yaw) more frequently that it used the x,y,z information.
+
+## Roll Pitch Yaw 
+
+Because roll, pitch, and yaw are all in degrees, it may be worth while to transform them to something more "natural" or "innate".  Perhaps taking the sin and cos of the roll, pitch, and yaw information may result in something more.
+
+```{r cache=TRUE}
+
+trainSC <- train
+trainSC[,paste("SIN",rpyCols,sep="_")] <- sin(train[,rpyCols]*pi/180)
+trainSC[,paste("COS",rpyCols,sep="_")] <- cos(train[,rpyCols]*pi/180)
+
+```
+
+```{r fitV2a,cache=TRUE}
+
+# Without centering
+set.seed(122333)
+system.time(fit2A <- train(classe~.,data=trainSC,method="rpart"))
+
+```
+
+```{r cache=TRUE}
+
+# Without Centering
+predict2A <- predict(fit2A,train)
+confusionMatrix(predict2A,train[,"classe"])
+
+```
+
+Well that did a lot of nothing.
+
+## Forcing use of the user_name
+
+Because we know that there is a quite sizeable difference in the centers of the data points for each user, perhaps we could try forcing the tree to incorporate user_name into its algorithm.  This could be like calibrating the device to the user.
+
+
+```{r cache=TRUE}
+
+fitFun <- function(d) train(classe~.,data=d,method="rpart")
+
+
+userFits <- dlply(train,.(user_name),fitFun)
+
+```
+
+```{r cache=TRUE}
+
+userPredict <- list()
+ 
+for( i in  1:length(users)){
+  user <- users[[i]]
+  train[train$user_name==user,"predict"] <- predict(userFits[[user]],train[train$user_name==(user),])
+}
+  
+confusionMatrix(train$predict,train$classe)
+
+```
+
+Well thats a bit better.  Lets use this as our final model.
+
+# Analyzing the Out Of Sample Error
+
+Lets analyze the out of sample error with this model we have built.
+
+```{r cache=TRUE}
+
+for( i in  1:length(users)){
+  user <- users[[i]]
+  testOOSE[testOOSE$user_name==user,"predict"] <- predict(userFits[[user]],testOOSE[testOOSE$user_name==user,])
+}
+
+confusionMatrix(testOOSE$predict,testOOSE$classe)
+
+```
+
+Looking at the confusion matrix information, we can see a few things.  We see that the accuracy has gone down to 71.1%.  While this is a statistically significant amount, it is not that much lower the the in sample error.  We can see that it had the hardest time with classes B and C.  We can see that A and D seemed to be the easiest for it.
+
+# Moving Forward
+
+If I were to move forward with this project, the place I would spend the most effort would be on adjusing the tuning parameters for the tree and perhaps adding some new features to the model.  In terms of the trees made the are all rather small, I wonder what would happen if they were made larger.  In terms of new features, perhaps looking at discretizing some of the parameters.   
