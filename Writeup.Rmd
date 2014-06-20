@@ -297,6 +297,24 @@ confusionMatrix(testOOSE$predict,testOOSE$classe)
 
 Looking at the confusion matrix information, we can see a few things.  We see that the accuracy has gone down to 71.1%.  While this is a statistically significant amount, it is not that much lower the the in sample error.  We can see that it had the hardest time with classes B and C.  We can see that A and D seemed to be the easiest for it.
 
+# My Final Answers
+
+These are my final probabilities for the 20 data points assigned for prediction in the final project.
+
+```{r cache=TRUE}
+
+testPROJ[,c("TOP",LETTERS[1:5])]<-NA
+
+for( i in  1:length(users)){
+  user <- users[[i]]
+  testPROJ[testPROJ$user_name==user,"TOP"] <- predict(userFits[[user]],testPROJ[testPROJ$user_name==user,])
+  testPROJ[testPROJ$user_name==user,LETTERS[1:5]] <- predict(userFits[[user]],testPROJ[testPROJ$user_name==user,],type="prob")
+}
+
+print(testPROJ[,c("user_name","TOP",LETTERS[1:5])])
+
+```
+
 # Moving Forward
 
-If I were to move forward with this project, the place I would spend the most effort would be on adjusing the tuning parameters for the tree and perhaps adding some new features to the model.  In terms of the trees made the are all rather small, I wonder what would happen if they were made larger.  In terms of new features, perhaps looking at discretizing some of the parameters.   
+If I were to move forward with this project, the place I would spend the most effort would be on adjusing the tuning parameters for the tree and perhaps adding some new features to the model.  In terms of the trees made the are all rather small, I wonder what would happen if they were made larger.  In terms of new features, perhaps looking at discretizing some of the parameters.

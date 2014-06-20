@@ -661,9 +661,47 @@ confusionMatrix(testOOSE$predict,testOOSE$classe)
 
 <p>Looking at the confusion matrix information, we can see a few things.  We see that the accuracy has gone down to 71.1%.  While this is a statistically significant amount, it is not that much lower the the in sample error.  We can see that it had the hardest time with classes B and C.  We can see that A and D seemed to be the easiest for it.</p>
 
+<h1>My Final Answers</h1>
+
+<p>These are my final probabilities for the 20 data points assigned for prediction in the final project.</p>
+
+<pre><code class="r">testPROJ[,c(&quot;TOP&quot;,LETTERS[1:5])]&lt;-NA
+
+for( i in  1:length(users)){
+  user &lt;- users[[i]]
+  testPROJ[testPROJ$user_name==user,&quot;TOP&quot;] &lt;- predict(userFits[[user]],testPROJ[testPROJ$user_name==user,])
+  testPROJ[testPROJ$user_name==user,LETTERS[1:5]] &lt;- predict(userFits[[user]],testPROJ[testPROJ$user_name==user,],type=&quot;prob&quot;)
+}
+
+print(testPROJ[,c(&quot;user_name&quot;,&quot;TOP&quot;,LETTERS[1:5])])
+</code></pre>
+
+<pre><code>##    user_name TOP       A        B        C       D        E
+## 1      pedro   1 0.49634 0.385366 0.078049 0.01951 0.020732
+## 2     jeremy   1 0.90032 0.036442 0.009646 0.03966 0.013934
+## 3     jeremy   3 0.01106 0.303226 0.348387 0.02488 0.312442
+## 4     adelmo   1 0.96875 0.031250 0.000000 0.00000 0.000000
+## 5     eurico   1 0.96462 0.000000 0.000000 0.00000 0.035377
+## 6     jeremy   3 0.01106 0.303226 0.348387 0.02488 0.312442
+## 7     jeremy   4 0.07977 0.005837 0.186770 0.61284 0.114786
+## 8     jeremy   1 0.90032 0.036442 0.009646 0.03966 0.013934
+## 9   carlitos   1 0.99529 0.000000 0.000000 0.00000 0.004706
+## 10   charles   1 0.91016 0.072165 0.000000 0.01767 0.000000
+## 11  carlitos   2 0.09190 0.460419 0.275705 0.02639 0.145587
+## 12    jeremy   3 0.01106 0.303226 0.348387 0.02488 0.312442
+## 13    eurico   2 0.05844 0.751082 0.004329 0.01082 0.175325
+## 14    jeremy   1 0.90032 0.036442 0.009646 0.03966 0.013934
+## 15    jeremy   3 0.01106 0.303226 0.348387 0.02488 0.312442
+## 16    eurico   5 0.01857 0.021220 0.000000 0.17507 0.785146
+## 17     pedro   1 0.49634 0.385366 0.078049 0.01951 0.020732
+## 18  carlitos   2 0.09190 0.460419 0.275705 0.02639 0.145587
+## 19     pedro   1 0.49634 0.385366 0.078049 0.01951 0.020732
+## 20    eurico   2 0.05844 0.751082 0.004329 0.01082 0.175325
+</code></pre>
+
 <h1>Moving Forward</h1>
 
-<p>If I were to move forward with this project, the place I would spend the most effort would be on adjusing the tuning parameters for the tree and perhaps adding some new features to the model.  In terms of the trees made the are all rather small, I wonder what would happen if they were made larger.  In terms of new features, perhaps looking at discretizing some of the parameters.   </p>
+<p>If I were to move forward with this project, the place I would spend the most effort would be on adjusing the tuning parameters for the tree and perhaps adding some new features to the model.  In terms of the trees made the are all rather small, I wonder what would happen if they were made larger.  In terms of new features, perhaps looking at discretizing some of the parameters.</p>
 
 </body>
 
